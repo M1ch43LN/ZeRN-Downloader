@@ -109,7 +109,6 @@ try {
                 Write-Info "Markiere Rechnung ID $invoice_id als 'heruntergeladen'..."
                 try {
                     $response_downloaded = Invoke-RestMethod -Method Patch -Uri $url -Headers $api_headers -ContentType "application/json" 
-                    $response_downloaded
                 } catch {
                     Write-Error "Fehler beim Markieren als 'heruntergeladen'. Rechnung ID $invoice_id"
                     Write-Error $_
