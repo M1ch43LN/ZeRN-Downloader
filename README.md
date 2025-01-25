@@ -1,6 +1,42 @@
 # ZeRN-Downloader
-Powershell-Skript zum automatisierten Herunterladen von Rechnungen aus dem ZeRN (Zentraler eRechnungseingang Niedersachsen).
-## Voraussetzungen
-Um mit dem Skript Rechnungen aus dem ZeRN-Portal abrufen zu können, muss die API-Schnittstelle für das gewünschte Benutzerkonto freigeschaltet werden. Informationen zur Schnittstelle und deren Freischaltung gibt es [hier](https://rechnung.niedersachsen.de/startseite/informationen-fuer-rechnungsempfaenger/schnittstelle-zum-abruf-von-rechnungen-210483.html).
-## Installation und Konfiguration
+Powershell-Skript zum automatisierten Herunterladen von Rechnungen aus dem ZeRN (Zentraler eRechnungseingang Niedersachsen) per REST-API.
 
+Das Skript ist darauf ausgelegt, auf einem Windows-Server per Aufgabenplaner regelmäßig (z.B. einmal pro Stunde) ausgeführt zu werden. Die Rechnungsdateien werden aus dem ZeRN-Portal heruntergeladen und anschließend als "heruntergeladen" markiert.
+
+## Voraussetzungen
+Um mit dem Skript Rechnungen aus dem ZeRN-Portal abrufen zu können, muss die API-Schnittstelle für das gewünschte Benutzerkonto vom Land freigeschaltet worden sein. 
+
+Informationen zur Schnittstelle und deren Freischaltung gibt es [hier](https://rechnung.niedersachsen.de/startseite/informationen-fuer-rechnungsempfaenger/schnittstelle-zum-abruf-von-rechnungen-210483.html).
+
+## Installation und Konfiguration
+Alle Dateien müssen in ein Arbeitsverzeichnis kopiert werden, z.B. `C:\ZeRN`.
+
+Im Arbeitsverzeichnis muss eine Konfigurationsdatei `ZeRN-Downloader.config.ps1` angelegt werden. Als Vorlage durch Umbenennen kann hierfür die Datei `ZeRN-Downloader.config-sample.ps1` aus dem Repository verwendet werden.
+
+Folgende Konfigurationen müssen festgelegt werden:
+
+```powershell
+# Benutzername für den Zugriff auf die API
+$api_username = "erechnung@domain.de"
+
+# Passwort für den Zugriff auf die API
+$api_password = "VerYS3cretP@ssw0rd"
+
+# Verzeichnis, in dem die Rechnungen im XML-Format gespeichert werden sollen
+$files_xml = "$PSScriptRoot\xml"
+
+# Verzeichnis, in dem die Validierungsreports der Rechnungen gespeichert werden sollen.
+# Leerer String deaktiviert das Herunterladen der Validierungsreports
+#$files_validation = "$PSScriptRoot\validation"
+$files_validation = ""
+
+# Pfad, in dem die Protokolldateien gespeichern werden sollen
+$files_log = "$PSScriptRoot\log"
+
+# Detailgrad der Protokollieren. Mögliche Werte:
+# - $log_debug
+# - $log_info (Standard)
+# - $log_warning
+# - $log_error
+$log_level = $log_info
+```
