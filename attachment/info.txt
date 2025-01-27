@@ -1,0 +1,1 @@
+In diesem Ordner werden die Attachments gespeichert. Der Dateiname setzt sich aus der Rechnungs-ID und dem originalen Dateinamen des Anhangs zusammen.
