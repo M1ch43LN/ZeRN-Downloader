@@ -1,0 +1,1 @@
+In diesem Verzeichnis werden die Rechnungsdateien im XML-Format mit UBL-Syntax gespeichert.
