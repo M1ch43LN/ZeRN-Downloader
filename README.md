@@ -22,8 +22,14 @@ $api_username = "erechnung@domain.de"
 # Passwort für den Zugriff auf die API
 $api_password = "VerYS3cretP@ssw0rd"
 
-# Verzeichnis, in dem die Rechnungen im XML-Format gespeichert werden sollen
+# Verzeichnis, in dem die Rechnungen im XML-Format gespeichert werden sollen, deren Syntax nicht erkannt wurde
 $files_xml = "$PSScriptRoot\xml"
+
+# Verzeichnis, in dem die Rechnungen im XML-Format mit CII-Syntax gespeichert werden sollen
+$files_xml_cii = "$PSScriptRoot\xml_cii"
+
+# Verzeichnis, in dem die Rechnungen im XML-Format mit UBL-Syntax gespeichert werden sollen
+$files_xml_ubl = "$PSScriptRoot\xml_ubl"
 
 # Verzeichnis, in dem die Validierungsreports der Rechnungen gespeichert werden sollen.
 # Leerer String deaktiviert das Herunterladen der Validierungsreports
