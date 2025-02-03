@@ -1,3 +1,18 @@
+###############################################################################
+# ZeRN-Downloader
+# 
+# Skript zum automatisierten Herunterladen von eRechnungen aus dem Zentralen
+# eRechnungseingang Niedersachsen (ZeRN).
+# 
+# Infos: https://github.com/M1ch43LN/ZeRN-Downloader
+#
+# Historie:
+# 
+# 2025-01-27 Initiale Version
+# 2025-02-03 Trennung der Verzeichnisse nach XML-Syntax (CII/UBL) möglich
+# 
+###############################################################################
+
 # Funktionen laden
 . "$PSScriptRoot\ZeRN-Downloader.functions.ps1"
 # Konfiguration laden
@@ -6,6 +21,10 @@
 # Protokoll starten
 $log_date = Get-Date -Format "yyyy-MM-dd"
 Start-Transcript -Path "$files_log\$log_date.log" -Append
+
+Write-Debug "Verzeichnis XML-Dateien: $files_xml"
+Write-Debug "Verzeichnis Validierungsreports: $files_validation"
+Write-Debug "Verzeichnis Attachments: $files_attachment"
 
 # API-URLs definieren
 $api_baseurl = "https://api.erechnung.niedersachsen.de"
@@ -27,7 +46,7 @@ $api_headers_attachment.Add("accept", "application/octet-stream")
 $body = "{ ""userName"": ""$api_username"", ""password"": ""$api_password"" }"
 
 # User Agent
-$useragent = "ZeRN-Downloader/1.0 (https://github.com/M1ch43LN/ZeRN-Downloader)"
+$useragent = "ZeRN-Downloader/1.1 (https://github.com/M1ch43LN/ZeRN-Downloader)"
 
 # Anmeldung an API, Access Token holen
 try {    
@@ -74,7 +93,20 @@ try {
 
             # XML-Datei speichern
             try {
-                $file_xml = "$files_xml\$invoice_id.xml"
+                $xml = $response_xml.InnerXml
+                if ($xml.toLower().Contains("rsm:crossindustryinvoice") -eq $true) {
+                    Write-Debug "XML-Syntax: CII"
+                    $file_xml = "$files_xml_cii\$invoice_id.xml"
+                } else {
+                    if ($xml.toLower().Contains("ubl:invoice") -eq $true) {
+                        Write-Debug "XML-Syntax: UBL"
+                        $file_xml = "$files_xml_ubl\$invoice_id.xml"
+                    } else {
+                        Write-Warning "XML-Syntax nicht erkannt."
+                        $file_xml = "$files_xml\$invoice_id.xml"
+                    }
+                }
+
                 Write-Info "Speichere '$file_xml'"
                 $response_xml.InnerXml | Out-File -Encoding utf8 -FilePath $file_xml -Force
 
@@ -161,7 +193,6 @@ try {
             Write-Error $_
         }        
     }
-
 } catch {
     Write-Error "Fehler beim Laden der Rechnungsliste..."
     Write-Error $_
