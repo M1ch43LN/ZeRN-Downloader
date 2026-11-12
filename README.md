@@ -5,6 +5,9 @@ Das Skript ist darauf ausgelegt, auf einem Windows-Server per Aufgabenplaner reg
 
 Lauffähig mit Windows PowerShell 5.1 und PowerShell 7.
 
+## Ablauf
+![Ablauf des ZeRN-Downloaders](docs/ablauf.png)
+
 ## Voraussetzungen
 Um mit dem Skript eRechnungen aus dem ZeRN-Portal abrufen zu können, muss die API-Schnittstelle für das gewünschte Benutzerkonto vom Land freigeschaltet worden sein. 
 
