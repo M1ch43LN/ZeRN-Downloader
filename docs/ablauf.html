@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!--
+  Ablaufdiagramm ZeRN-Downloader (Quelle für docs/ablauf.png)
+
+  Bearbeiten: Kästen und Texte sind absolut positionierte <div class="box">,
+  Pfeile sind <path>-Elemente im SVG (Koordinaten in Pixel, Seite 1123 x 794).
+
+  PNG neu erzeugen (Google Chrome oder Microsoft Edge, im Ordner docs):
+    chrome --headless --hide-scrollbars --window-size=1123,794 --force-device-scale-factor=1.5625 --screenshot=ablauf.png ablauf.html
+  (Edge: msedge statt chrome. Ergebnis: ca. 1755 x 1240 Pixel)
+
+  PDF erzeugen:
+    chrome --headless --no-pdf-header-footer --print-to-pdf=ablauf.pdf ablauf.html
+--><html lang="de"><head><meta charset="utf-8"><style>
+@page { size: A4 landscape; margin:0 }
+* { box-sizing:border-box; margin:0; padding:0 }
+body { font-family:Inter, "Segoe UI", Arial, "DejaVu Sans", sans-serif; color:#1F2A37; -webkit-print-color-adjust:exact; print-color-adjust:exact }
+.page { position:relative; width:1123px; height:794px; overflow:hidden; background:#fff }
+.head { position:absolute; left:0; top:0; width:1123px; height:74px; background:#1F3A5F; color:#fff; padding:18px 40px }
+.head h1 { font-size:22px; font-weight:700; letter-spacing:.2px }
+.head p { font-size:11.5px; color:#B9C8DC; margin-top:3px }
+.head .meta { position:absolute; right:40px; top:22px; text-align:right; font-size:10.5px; color:#B9C8DC; line-height:1.5 }
+.phase { position:absolute; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#1F3A5F }
+.phase span { display:inline-block; width:20px; height:20px; border-radius:50%; background:#1F3A5F; color:#fff; text-align:center; line-height:20px; margin-right:8px; font-size:11px }
+.box { position:absolute; background:#fff; border:1px solid #C9D3E0; border-left:4px solid #2F6FB2; border-radius:6px; padding:9px 10px 8px 12px; box-shadow:0 1px 3px rgba(31,58,95,.10); display:flex; flex-direction:column; justify-content:center }
+.box .t { font-size:12.5px; font-weight:600; line-height:1.25 }
+.box .s { font-size:9.8px; color:#5B6B7F; margin-top:3px; line-height:1.3 }
+.box .num { position:absolute; right:7px; top:6px; font-size:9px; font-weight:700; color:#8A97A8 }
+.box.acc { border-left-color:#D97706; background:#FFF7ED; border-color:#F3C99A }
+.box.warn { border-left-color:#B7950B; background:#FDFAEC; border-color:#E8DCA6 }
+.box.err { border-left-color:#C0392B; background:#FDECEA; border-color:#EFB8B1 }
+.box.ok { border-left-color:#2E7D32; background:#EAF5EA; border-color:#A9D3AB }
+.dtext { position:absolute; display:flex; align-items:center; justify-content:center; text-align:center; font-size:11px; font-weight:600; line-height:1.3 }
+.frame { position:absolute; border:1.2px dashed #AEB9C7; border-radius:10px; background:#F7F9FC }
+.ftag { position:absolute; left:14px; top:-9px; background:#fff; padding:0 6px; font-size:9.5px; color:#5B6B7F; text-transform:uppercase; letter-spacing:.8px }
+.lbl { position:absolute; font-size:9.5px; color:#5B6B7F; font-weight:500 }
+.lbl.err { color:#C0392B }
+.vert { transform:rotate(-90deg); transform-origin:left top }
+.loopl { color:#8A97A8; line-height:1.25 }
+.foot { position:absolute; left:40px; right:40px; top:660px; height:100px; display:flex; gap:22px }
+.legend { flex:0 0 430px; border-top:2px solid #1F3A5F; padding-top:9px }
+.legend h3, .note h3 { font-size:10.5px; text-transform:uppercase; letter-spacing:1px; color:#1F3A5F; margin-bottom:7px }
+.codes { display:grid; grid-template-columns:1fr 1fr; gap:5px 16px; font-size:10px }
+.code b { display:inline-block; width:18px; height:18px; border-radius:4px; text-align:center; line-height:18px; color:#fff; margin-right:7px; font-size:10px }
+.note { flex:1; border-top:2px solid #D97706; padding-top:9px; font-size:10px; line-height:1.45; color:#374151 }
+.note h3 { color:#B45309 }
+.small { position:absolute; left:40px; bottom:14px; font-size:8.5px; color:#8A97A8 }
+</style></head><body><div class="page">
+<div class="head"><h1>ZeRN-Downloader</h1><p>Ablauf eines Laufs in groben Zügen · Abruf von eRechnungen aus dem Zentralen eRechnungseingang Niedersachsen</p>
+<div class="meta">Version 1.5<br>Stand 12.11.2026</div></div>
+<div class="frame" style="left:395px;top:135px;width:330px;height:500px"><div class="ftag">für jede Rechnung</div></div><svg width="1123" height="794" style="position:absolute;left:0;top:0">
+<defs>
+<marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5B6B7F"/></marker>
+<marker id="e" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#C0392B"/></marker>
+<marker id="l" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8A97A8"/></marker>
+</defs><path d="M55,176 L38,176" fill="none" stroke="#C0392B" stroke-width="1.4" stroke-dasharray="5,4" /><path d="M55,276 L38,276" fill="none" stroke="#C0392B" stroke-width="1.4" stroke-dasharray="5,4" /><path d="M55,376 L38,376" fill="none" stroke="#C0392B" stroke-width="1.4" stroke-dasharray="5,4" /><path d="M38,176 L38,498 L55,498" fill="none" stroke="#C0392B" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#e)"/><path d="M180.0,207 L180.0,245" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/><path d="M180.0,307 L180.0,345" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/><path d="M305,376 L350,376 L350,176 L415,176" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/><path d="M550,207 L550,235" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/><path d="M550,291 L550,319" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/><path d="M550,375 L550,405" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/><polygon points="550,405.0 645.0,445 550,485.0 455.0,445" fill="#fff" stroke="#2F6FB2" stroke-width="1.6"/><path d="M455,445 L455,520" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/><path d="M645,445 L645,520" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/><path d="M479,602 L479,620 L708,620 L708,190 L685,190" fill="none" stroke="#8A97A8" stroke-width="1.4" stroke-dasharray="3,4" marker-end="url(#l)"/><path d="M621,602 L621,620" fill="none" stroke="#8A97A8" stroke-width="1.4" stroke-dasharray="3,4" /><path d="M725,176 L790,176" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/><path d="M910,207 L910,232" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/><polygon points="910,232.0 1035.0,276 910,320.0 785.0,276" fill="#fff" stroke="#2F6FB2" stroke-width="1.6"/><path d="M910,320 L910,350" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/><path d="M910,412 L910,450" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/><path d="M790,381 L772,381 L772,576 L790,576" fill="none" stroke="#C0392B" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#e)"/><path d="M1035,276 L1062,276 L1062,478 L1030,478" fill="none" stroke="#5B6B7F" stroke-width="1.6" marker-end="url(#a)"/></svg><div class="phase" style="left:40px;top:100px"><span>1</span>Vorbereitung</div><div class="phase" style="left:395px;top:100px"><span>2</span>Download je Rechnung</div><div class="phase" style="left:780px;top:100px"><span>3</span>Abschluss</div><div class="box std" style="left:55px;top:145px;width:250px;height:62px"><span class="num">1</span><div class="t">Konfiguration laden</div><div class="s">Verzeichnisse prüfen, Protokoll starten</div></div><div class="box std" style="left:55px;top:245px;width:250px;height:62px"><span class="num">2</span><div class="t">Anmeldung an der ZeRN-API</div><div class="s">Access Token anfordern</div></div><div class="box std" style="left:55px;top:345px;width:250px;height:62px"><span class="num">3</span><div class="t">Neue Rechnungen abrufen</div><div class="s">Liste aller Rechnungen mit Status „neu“</div></div><div class="box err" style="left:55px;top:470px;width:250px;height:56px"><div class="t">Abbruch</div><div class="s">Exit-Code 1</div></div><div class="lbl err vert" style="left:14px;top:420px">Fehler</div><div class="box std" style="left:415px;top:145px;width:270px;height:62px"><span class="num">4</span><div class="t">Rechnungs-XML laden</div><div class="s">bytegenau ablegen: CII · UBL · unbekannt</div></div><div class="box std" style="left:415px;top:235px;width:270px;height:56px"><span class="num">5</span><div class="t">Validierungsreport laden</div><div class="s">optional</div></div><div class="box std" style="left:415px;top:319px;width:270px;height:56px"><span class="num">6</span><div class="t">Anhänge laden</div><div class="s">optional · z. B. PDF, ohne Rechnungs-XML</div></div><div class="dtext" style="left:455.0px;top:405.0px;width:190px;height:80px">Alles<br>gespeichert?</div><div class="box acc" style="left:415px;top:520px;width:128px;height:82px"><span class="num">7</span><div class="t">Im ZeRN<br>markieren</div><div class="s">„heruntergeladen“</div></div><div class="box warn" style="left:557px;top:520px;width:128px;height:82px"><div class="t">Bleibt „neu“</div><div class="s">wird beim nächsten Lauf erneut geladen · Exit 2</div></div><div class="lbl" style="left:436px;top:452px">ja</div><div class="lbl" style="left:652px;top:452px">nein</div><div class="lbl loopl" style="left:712px;top:395px">nächste<br>Rechnung</div><div class="lbl" style="left:732px;top:156px">alle erledigt</div><div class="box std" style="left:790px;top:145px;width:240px;height:62px"><span class="num">8</span><div class="t">Manifest schreiben</div><div class="s">JSON mit allen Rechnungen des Laufs</div></div><div class="dtext" style="left:785.0px;top:232.0px;width:250px;height:88px">Workflow-Skript aktiv und<br>≥ 1 Rechnung erfolgreich?</div><div class="box acc" style="left:790px;top:350px;width:240px;height:62px"><span class="num">9</span><div class="t">Workflow-Skript starten</div><div class="s">eigener Prozess, erhält das Manifest</div></div><div class="lbl" style="left:916px;top:326px">ja</div><div class="box ok" style="left:790px;top:450px;width:240px;height:56px"><div class="t">Ende</div><div class="s">Exit-Code 0 bzw. 2</div></div><div class="lbl" style="left:916px;top:421px">erfolgreich</div><div class="box err" style="left:790px;top:548px;width:240px;height:56px"><div class="t">Workflow fehlgeschlagen</div><div class="s">Exit-Code 3 · auch bei Timeout</div></div><div class="lbl err vert" style="left:746px;top:470px">Fehler</div><div class="lbl" style="left:1040px;top:256px">nein</div>
+<div class="foot">
+ <div class="legend"><h3>Exit-Codes für die Aufgabenplanung</h3><div class="codes">
+  <div class="code"><b style="background:#2E7D32">0</b>Alles erfolgreich</div>
+  <div class="code"><b style="background:#C0392B">1</b>Abbruch vor dem Download</div>
+  <div class="code"><b style="background:#B7950B">2</b>Einzelne Rechnungen fehlerhaft</div>
+  <div class="code"><b style="background:#D97706">3</b>Workflow-Skript fehlgeschlagen</div>
+ </div></div>
+ <div class="note"><h3>Wichtig</h3>
+  Das Workflow-Skript (Schritt 9) startet erst, <b>nachdem</b> die Rechnungen im ZeRN als „heruntergeladen“ markiert sind (Schritt 7). Scheitert es, liefert das ZeRN diese Rechnungen nicht erneut. Sie müssen anhand des Manifests nachverarbeitet werden.<br>
+  <span style="color:#5B6B7F">Außerdem automatisch: Token-Erneuerung · Timeout je API-Aufruf 120 s · Testmodus <i>-NoMark</i> ohne Markierung und ohne Workflow-Skript.</span>
+ </div>
+</div>
+<div class="small">Orange = Schritte mit Wirkung außerhalb des Downloaders · gestrichelt rot = Fehlerpfad</div>
+</div></body></html>
