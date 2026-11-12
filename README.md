@@ -61,6 +61,8 @@ Programm: `powershell.exe`
 
 Argumente: `-NoProfile -ExecutionPolicy Bypass -File "C:\ZeRN\ZeRN-Downloader.ps1"`
 
+Für einen ersten Probelauf kann das Skript mit `-NoMark` gestartet werden: Rechnungen, Reports und Anhänge werden geladen, im ZeRN aber nicht als "heruntergeladen" markiert.
+
 Wichtig ist `-File` (nicht `-Command`), damit der Exit-Code in der Aufgabenplanung als "Ergebnis der letzten Ausführung" ankommt.
 
 | Exit-Code | Bedeutung |

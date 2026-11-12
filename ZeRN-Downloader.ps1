@@ -11,6 +11,10 @@
 #   1 = Abbruch (Konfiguration, Verzeichnisse, Anmeldung, Rechnungsliste)
 #   2 = mindestens eine Rechnung fehlerhaft (bleibt im ZeRN auf "neu")
 #
+# Parameter:
+#   -NoMark  Testmodus: Dateien werden geladen, die Rechnungen aber NICHT
+#            als heruntergeladen markiert (bleiben im ZeRN auf "neu")
+#
 # Historie:
 #
 # 2025-01-27 Initiale Version
@@ -25,6 +29,10 @@
 #            Verzeichnisse werden angelegt, TLS 1.2, kein Token im Log
 #
 ###############################################################################
+
+param (
+    [switch]$NoMark
+)
 
 # Funktionen laden
 . "$PSScriptRoot\ZeRN-Downloader.functions.ps1"
@@ -67,6 +75,8 @@ Write-Debug "Verzeichnis Validierungsreports: $files_validation"
 Write-Debug "Verzeichnis Attachments: $files_attachment"
 
 $load_validation = -not [string]::IsNullOrWhiteSpace($files_validation)
+if ($NoMark) { Write-Warning "Testmodus (-NoMark): Rechnungen werden nicht als heruntergeladen markiert." }
+
 $load_attachments = -not [string]::IsNullOrWhiteSpace($files_attachment)
 
 # Anmeldung an API
@@ -112,6 +122,9 @@ foreach ($invoice in $invoices) {
     # XML-Datei der Rechnung herunterladen und unverändert speichern
     try {
         $xml_bytes = Invoke-Api -Path "/api/invoice/$invoice_id/xml"
+        if ($null -eq $xml_bytes -or $xml_bytes.Length -eq 0) {
+            throw "Die API hat eine leere Rechnung geliefert."
+        }
 
         switch (Get-XmlSyntax $xml_bytes) {
             "CII" {
@@ -142,6 +155,9 @@ foreach ($invoice in $invoices) {
         try {
             Write-Info "Lade Validierungsreport ID '$invoice_id'..."
             $validation_bytes = Invoke-Api -Path "/api/invoice/$invoice_id/validationreport"
+            if ($null -eq $validation_bytes -or $validation_bytes.Length -eq 0) {
+                throw "Die API hat einen leeren Validierungsreport geliefert."
+            }
             $file_validation = Join-Path $files_validation "$invoice_id.xml"
             Write-Info "Speichere '$file_validation'"
             Save-Bytes -Path $file_validation -Bytes $validation_bytes
@@ -192,7 +208,9 @@ foreach ($invoice in $invoices) {
     }
 
     # Rechnung als heruntergeladen markieren
-    if ($success) {
+    if ($success -and $NoMark) {
+        Write-Warning "Testmodus (-NoMark): Rechnung ID $invoice_id wird nicht als heruntergeladen markiert."
+    } elseif ($success) {
         try {
             Write-Info "Markiere Rechnung ID $invoice_id als 'heruntergeladen'..."
             [void](Invoke-Api -Method Patch -Path "/api/invoice/$invoice_id/downloaded")
