@@ -32,3 +32,15 @@ $files_log = "$PSScriptRoot\log"
 # - $log_warning
 # - $log_error
 $log_level = $log_info
+
+# Optional: PowerShell-Skript, das nach jedem Lauf mit neu gespeicherten Rechnungen
+# gestartet wird (eigener Prozess, Parameter -ExitCode und -ManifestPath).
+# Vorlage: ZeRN-Workflow-sample.ps1. Leerer String = kein Workflow-Skript
+#$workflowscript = "$PSScriptRoot\ZeRN-Workflow.ps1"
+$workflowscript = ""
+
+# Optional: maximale Laufzeit des Workflow-Skripts in Sekunden (0 = unbegrenzt, Standard: 3600)
+#$workflow_timeout = 3600
+
+# Optional: Verzeichnis für die Manifeste der Läufe (Standard: Unterverzeichnis "manifest" im Log-Verzeichnis)
+#$files_manifest = "$PSScriptRoot\log\manifest"

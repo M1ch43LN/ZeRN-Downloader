@@ -15,10 +15,17 @@
 
 # API
 $api_baseurl = "https://api.erechnung.niedersachsen.de"
-$useragent = "ZeRN-Downloader/1.4 (https://github.com/M1ch43LN/ZeRN-Downloader)"
+$useragent = "ZeRN-Downloader/1.5 (https://github.com/M1ch43LN/ZeRN-Downloader)"
 
 # Timeout je API-Aufruf in Sekunden (in der Konfiguration überschreibbar)
 $api_timeout = 120
+
+# Workflow-Skript (leer = keines) und dessen Timeout in Sekunden (0 = unbegrenzt)
+$workflowscript = ""
+$workflow_timeout = 3600
+
+# Verzeichnis für Manifeste (leer = Unterverzeichnis "manifest" im Log-Verzeichnis)
+$files_manifest = ""
 
 # Aktuelles Token (AccessToken, RefreshToken, ExpiresAt)
 $zern_token = $null
@@ -316,4 +323,123 @@ function Invoke-ApiJson {
         [string]$Path
     )
     return (ConvertFrom-JsonBytes (Invoke-Api -Method $Method -Path $Path))
+}
+
+###############################################################################
+# Manifest und Workflow
+###############################################################################
+
+# Manifest-Eintrag für eine Rechnung aus der Rechnungsliste
+function New-ManifestEntry {
+    param ($Invoice)
+    $received = $Invoice.received
+    if ($received -is [datetime]) { $received = $received.ToString("o") }
+    return [ordered]@{
+        InvoiceId           = [string]$Invoice.id
+        Received            = [string]$received
+        SenderName          = [string]$Invoice.sender.name
+        SenderEmail         = [string]$Invoice.sender.emailAddress
+        SenderInvoiceNumber = [string]$Invoice.senderInvoiceNumber
+        Scheme              = $Invoice.scheme
+        TypeCode            = $Invoice.typeCode
+        Syntax              = $null
+        XmlFile             = $null
+        ValidationFile      = $null
+        Attachments         = (New-Object System.Collections.ArrayList)
+        Marked              = $false
+        Success             = $false
+    }
+}
+
+# Schreibt das Manifest eines Laufs als JSON (UTF-8 ohne BOM) und liefert den Pfad
+function Save-Manifest {
+    param (
+        [string]$Directory,
+        [datetime]$Started,
+        [int]$ExitCode,
+        [switch]$NoMark,
+        $Invoices
+    )
+    Initialize-Directory $Directory
+    $manifest = [ordered]@{
+        Version          = $useragent
+        Started          = $Started.ToString("o")
+        Finished         = (Get-Date).ToString("o")
+        NoMark           = [bool]$NoMark
+        DownloadExitCode = $ExitCode
+        InvoiceCount     = $Invoices.Count
+        SuccessCount     = @($Invoices | Where-Object { $_.Success }).Count
+        Invoices         = $Invoices
+    }
+    $json = ConvertTo-Json -InputObject $manifest -Depth 6
+    $file = Join-Path $Directory ("{0}.json" -f $Started.ToString("yyyy-MM-dd_HHmmss"))
+    Save-Bytes -Path $file -Bytes ((New-Object System.Text.UTF8Encoding($false)).GetBytes($json))
+    return $file
+}
+
+# Startet das Workflow-Skript in einem eigenen PowerShell-Prozess, wartet auf das
+# Ende und übernimmt dessen Ausgabe ins Protokoll. Rückgabe: $true bei Exit-Code 0.
+function Invoke-Workflow {
+    param (
+        [string]$Script,
+        [int]$ExitCode,
+        [string]$ManifestPath,
+        [int]$TimeoutSec = 0
+    )
+    if (-not (Test-Path -LiteralPath $Script -PathType Leaf)) {
+        Write-Error "Workflow-Skript '$Script' nicht gefunden."
+        return $false
+    }
+
+    # Gleiche PowerShell wie der Downloader (powershell.exe bzw. pwsh)
+    $exe = (Get-Process -Id $PID).Path
+    $arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" -ExitCode {1} -ManifestPath "{2}"' -f $Script, $ExitCode, $ManifestPath
+    $out_file = "$ManifestPath.workflow-stdout.txt"
+    $err_file = "$ManifestPath.workflow-stderr.txt"
+
+    Write-Info "Starte Workflow-Skript '$Script'..."
+    Write-Debug "Aufruf: $exe $arguments"
+    $started = Get-Date
+    try {
+        $process = Start-Process -FilePath $exe -ArgumentList $arguments -PassThru -NoNewWindow `
+            -RedirectStandardOutput $out_file -RedirectStandardError $err_file -ErrorAction Stop
+        # Handle merken, sonst liefert PS 5.1 nach dem Ende keinen ExitCode
+        $null = $process.Handle
+        if ($TimeoutSec -gt 0) {
+            $finished = $process.WaitForExit($TimeoutSec * 1000)
+        } else {
+            $process.WaitForExit()
+            $finished = $true
+        }
+        if (-not $finished) {
+            Write-Error "Workflow-Skript nach $TimeoutSec s abgebrochen (Timeout)."
+            try { $process.Kill() } catch { }
+            $process.WaitForExit(10000) | Out-Null
+        }
+        $process.WaitForExit()
+    } catch {
+        Write-Error "Workflow-Skript konnte nicht gestartet werden: $($_.Exception.Message)"
+        return $false
+    }
+
+    # Ausgabe des Workflow-Skripts ins Protokoll übernehmen
+    foreach ($f in @($out_file, $err_file)) {
+        if (Test-Path -LiteralPath $f) {
+            # Kindprozess schreibt in der Konsolen-Codepage (PS 5.1), nicht UTF-8
+            $text = [Console]::OutputEncoding.GetString([System.IO.File]::ReadAllBytes($f))
+            foreach ($line in ($text -split "`r?`n" | Where-Object { $_ -ne "" })) {
+                if ($f -eq $err_file) { Write-Error "[Workflow] $line" } else { Write-Info "[Workflow] $line" }
+            }
+            Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    $duration = [int]((Get-Date) - $started).TotalSeconds
+    if (-not $finished) { return $false }
+    if ($process.ExitCode -ne 0) {
+        Write-Error "Workflow-Skript beendet mit Exit-Code $($process.ExitCode) nach $duration s."
+        return $false
+    }
+    Write-Info "Workflow-Skript erfolgreich beendet nach $duration s."
+    return $true
 }
