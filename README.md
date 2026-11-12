@@ -46,6 +46,9 @@ $files_attachment = ""
 # Pfad, in dem die Protokolldateien gespeichern werden sollen
 $files_log = "$PSScriptRoot\log"
 
+# Timeout je API-Aufruf in Sekunden (optional, Standard: 120)
+# $api_timeout = 120
+
 # Detailgrad der Protokolle. Mögliche Werte:
 # - $log_debug
 # - $log_info (Standard)

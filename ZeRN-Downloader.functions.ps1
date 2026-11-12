@@ -15,7 +15,10 @@
 
 # API
 $api_baseurl = "https://api.erechnung.niedersachsen.de"
-$useragent = "ZeRN-Downloader/1.3 (https://github.com/M1ch43LN/ZeRN-Downloader)"
+$useragent = "ZeRN-Downloader/1.4 (https://github.com/M1ch43LN/ZeRN-Downloader)"
+
+# Timeout je API-Aufruf in Sekunden (in der Konfiguration überschreibbar)
+$api_timeout = 120
 
 # Aktuelles Token (AccessToken, RefreshToken, ExpiresAt)
 $zern_token = $null
@@ -204,6 +207,7 @@ function Invoke-ApiRaw {
         Headers         = $Headers
         UserAgent       = $useragent
         UseBasicParsing = $true
+        TimeoutSec      = $api_timeout
         ErrorAction     = "Stop"
     }
     if ($null -ne $Body) {

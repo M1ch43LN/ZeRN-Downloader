@@ -27,6 +27,8 @@
 #            /document-Endpunkt mit sicheren Dateinamen, Rechnungs-XML wird
 #            nicht mehr doppelt als Anhang gespeichert, atomisches Schreiben,
 #            Verzeichnisse werden angelegt, TLS 1.2, kein Token im Log
+# 2026-11-12 1.4: Sofortige Statusausgabe beim Start, Timeout je API-Aufruf,
+#            keine Fortschrittsanzeige (bremst Windows PowerShell 5.1)
 #
 ###############################################################################
 
@@ -44,6 +46,9 @@ if (-not (Test-Path -LiteralPath $config_file)) {
     exit 1
 }
 . $config_file
+
+# Fortschrittsanzeige von Invoke-WebRequest abschalten (in PS 5.1 sehr langsam)
+$ProgressPreference = "SilentlyContinue"
 
 # TLS 1.2 erzwingen (Windows PowerShell 5.1 nutzt je nach .NET-Konfiguration sonst ältere Protokolle)
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
@@ -66,7 +71,10 @@ try {
 
 # Protokoll starten
 $log_date = Get-Date -Format "yyyy-MM-dd"
-Start-Transcript -Path (Join-Path $files_log "$log_date.log") -Append | Out-Null
+$log_file = Join-Path $files_log "$log_date.log"
+Start-Transcript -Path $log_file -Append | Out-Null
+
+Write-Info "ZeRN-Downloader gestartet (PowerShell $($PSVersionTable.PSVersion), Protokoll: $log_file)"
 
 Write-Debug "Verzeichnis XML-Dateien (unbekannte Syntax): $files_xml"
 Write-Debug "Verzeichnis XML-Dateien CII: $files_xml_cii"
@@ -80,6 +88,7 @@ if ($NoMark) { Write-Warning "Testmodus (-NoMark): Rechnungen werden nicht als h
 $load_attachments = -not [string]::IsNullOrWhiteSpace($files_attachment)
 
 # Anmeldung an API
+Write-Info "Anmeldung an $api_baseurl als '$api_username' (Timeout $api_timeout s)..."
 try {
     Update-ApiToken
     Write-Info "Anmeldung an API erfolgreich."
@@ -90,6 +99,7 @@ try {
 }
 
 # Liste neuer Rechnungen holen
+Write-Info "Lade Liste neuer Rechnungen..."
 try {
     $response_invoices = Invoke-ApiJson -Path "/api/invoice/new"
 } catch {
