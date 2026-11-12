@@ -15,47 +15,25 @@ Alle Dateien müssen in ein Arbeitsverzeichnis kopiert werden, z.B. `C:\ZeRN`.
 
 Im Arbeitsverzeichnis muss eine Konfigurationsdatei `ZeRN-Downloader.config.ps1` angelegt werden. Als Vorlage durch Umbenennen kann hierfür die Datei `ZeRN-Downloader.config-sample.ps1` aus dem Repository verwendet werden.
 
-Folgende Konfigurationen müssen festgelegt werden:
+Die Vorlage ist kommentiert und in Abschnitte gegliedert: Zugangsdaten, Verzeichnisse, Protokollierung und Workflow-Skript. Pflicht sind Benutzername und Passwort, alle anderen Werte haben sinnvolle Vorgaben.
 
-```powershell
-# Benutzername für den Zugriff auf die API
-$api_username = "erechnung@domain.de"
+**Wichtig:** Die Konfigurationsdatei als **UTF-8 mit BOM** speichern (Notepad: "UTF-8 mit BOM"). Sonst liest Windows PowerShell 5.1 Umlaute falsch, was vor allem beim Passwort zu einer fehlgeschlagenen Anmeldung führt. Enthält das Passwort `$` oder `` ` ``, muss es in einfachen Anführungszeichen stehen.
 
-# Passwort für den Zugriff auf die API
-$api_password = "VerYS3cretP@ssw0rd"
-
-# Verzeichnis, in dem die Rechnungen im XML-Format gespeichert werden sollen, deren Syntax nicht erkannt wurde
-$files_xml = "$PSScriptRoot\xml"
-
-# Verzeichnis, in dem die Rechnungen im XML-Format mit CII-Syntax gespeichert werden sollen
-$files_xml_cii = "$PSScriptRoot\xml_cii"
-
-# Verzeichnis, in dem die Rechnungen im XML-Format mit UBL-Syntax gespeichert werden sollen
-$files_xml_ubl = "$PSScriptRoot\xml_ubl"
-
-# Verzeichnis, in dem die Validierungsreports der Rechnungen gespeichert werden sollen.
-# Leerer String deaktiviert das Herunterladen der Validierungsreports
-#$files_validation = "$PSScriptRoot\validation"
-$files_validation = ""
-
-# Verzeichnis, in dem die Anhänge der Rechnungen gespeichert werden sollen.
-# Leerer String deaktiviert das Herunterladen der Anhänge
-#$files_attachment = "$PSScriptRoot\attachment"
-$files_attachment = ""
-
-# Pfad, in dem die Protokolldateien gespeichern werden sollen
-$files_log = "$PSScriptRoot\log"
-
-# Timeout je API-Aufruf in Sekunden (optional, Standard: 120)
-# $api_timeout = 120
-
-# Detailgrad der Protokolle. Mögliche Werte:
-# - $log_debug
-# - $log_info (Standard)
-# - $log_warning
-# - $log_error
-$log_level = $log_info
-```
+| Parameter | Pflicht | Standard | Bedeutung |
+|---|---|---|---|
+| `$api_username` | ja | | Benutzername der API |
+| `$api_password` | ja | | Passwort der API |
+| `$api_timeout` | | `120` | Timeout je API-Aufruf in Sekunden |
+| `$files_xml` | ja | | Rechnungen mit nicht erkannter Syntax |
+| `$files_xml_cii` | ja | | Rechnungen in CII-Syntax |
+| `$files_xml_ubl` | ja | | Rechnungen in UBL-Syntax (Invoice, CreditNote) |
+| `$files_validation` | | `""` | Validierungsreports, leer = nicht laden |
+| `$files_attachment` | | `""` | Anhänge, leer = nicht laden |
+| `$files_log` | ja | | Protokolldateien |
+| `$files_manifest` | | `<files_log>\manifest` | Manifeste der Läufe |
+| `$log_level` | | `$log_info` | `$log_debug`, `$log_info`, `$log_warning`, `$log_error` |
+| `$workflowscript` | | `""` | Workflow-Skript, leer = keines |
+| `$workflow_timeout` | | `3600` | Maximale Laufzeit des Workflow-Skripts in Sekunden, 0 = unbegrenzt |
 
 Nicht vorhandene Verzeichnisse werden beim Start angelegt.
 
@@ -80,7 +58,6 @@ Optional kann in der Konfiguration ein PowerShell-Skript angegeben werden, das n
 
 ```powershell
 $workflowscript = "$PSScriptRoot\ZeRN-Workflow.ps1"
-$workflow_timeout = 3600   # optional, Sekunden, 0 = unbegrenzt
 ```
 
 - Es startet nur, wenn im Lauf **mindestens eine Rechnung vollständig gespeichert** wurde, also nicht bei 0 neuen Rechnungen, nicht nach einem Abbruch (Exit-Code 1) und nicht im Testmodus `-NoMark`.
