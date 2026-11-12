@@ -10,7 +10,7 @@ function Write-Log {
         [int]$LogType = $log_info
     )
 
-    $timestamp = Get-Date -Format "dd.MM.yyyy hh:mm:ss"
+    $timestamp = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
 
     $LogText = "$timestamp - [$LogType] - $LogText"
 

@@ -10,13 +10,20 @@
 # 
 # 2025-01-27 Initiale Version
 # 2025-02-03 Trennung der Verzeichnisse nach XML-Syntax (CII/UBL) möglich
-# 
+# 2026-11-12 Fehlerkorrekturen: Anhänge je Rechnung, kein veralteter
+#            Validierungsreport, 24h-Zeitstempel, Exit-Codes
+#            (0 = OK, 1 = Abbruch, 2 = mind. eine Rechnung fehlerhaft)
+#
 ###############################################################################
 
 # Funktionen laden
 . "$PSScriptRoot\ZeRN-Downloader.functions.ps1"
 # Konfiguration laden
 . "$PSScriptRoot\ZeRN-Downloader.config.ps1"
+
+# Exit-Codes für die Aufgabenplanung
+# 0 = alles OK, 1 = Abbruch (Anmeldung/Rechnungsliste), 2 = mind. eine Rechnung fehlerhaft
+$exit_code = 0
 
 # Protokoll starten
 $log_date = Get-Date -Format "yyyy-MM-dd"
@@ -46,7 +53,7 @@ $api_headers_attachment.Add("accept", "application/octet-stream")
 $body = "{ ""userName"": ""$api_username"", ""password"": ""$api_password"" }"
 
 # User Agent
-$useragent = "ZeRN-Downloader/1.1 (https://github.com/M1ch43LN/ZeRN-Downloader)"
+$useragent = "ZeRN-Downloader/1.2(https://github.com/M1ch43LN/ZeRN-Downloader)"
 
 # Anmeldung an API, Access Token holen
 try {    
@@ -60,8 +67,9 @@ try {
     Write-Debug "Access Token: $api_accesstoken"
 } catch {
     Write-Error "Fehler bei der Anmeldung..."
-    Write-Error $_ "error"
-    exit
+    Write-Error $_
+    Stop-Transcript
+    exit 1
 }
 
 try {
@@ -115,8 +123,10 @@ try {
                     $url = -join($api_baseurl,$api_endpoint_invoice_validation)
                     $url = $url.Replace("{invoiceId}", $invoice_id)
                     Write-Debug "API-URL: $url"
+                    # Zurücksetzen, damit nie der Report der vorherigen Rechnung gespeichert wird
+                    $response_validation = $null
                     try {
-                        Write-Info "Lade Validierungsreport ID '$invoice_id'..."                    
+                        Write-Info "Lade Validierungsreport ID '$invoice_id'..."
                         $response_validation = Invoke-RestMethod -Method Get -Uri $url -Headers $api_headers -ContentType "application/json" -UserAgent $useragent
                     } catch {
                         Write-Error "Fehler beim Laden des Validierungsreports für Rechnung ID $invoice_id"
@@ -124,22 +134,24 @@ try {
                         $success = $false
                     }
 
-                    # Validationreport speichern
-                    try {
-                        $file_validation = "$files_validation\$invoice_id.xml"
-                        Write-Info "Speichere '$file_validation'"
-                        $response_validation.InnerXml | Out-File -Encoding utf8 -FilePath $file_validation -Force
-                    } catch {
-                        Write-Error "Fehler beim Schreiben des Validierungsreports $file_validation für Rechnung ID $invoice_id"
-                        Write-Error $_
-                        $success = $false
+                    # Validationreport speichern (nur wenn erfolgreich geladen)
+                    if ($null -ne $response_validation) {
+                        try {
+                            $file_validation = "$files_validation\$invoice_id.xml"
+                            Write-Info "Speichere '$file_validation'"
+                            $response_validation.InnerXml | Out-File -Encoding utf8 -FilePath $file_validation -Force
+                        } catch {
+                            Write-Error "Fehler beim Schreiben des Validierungsreports $file_validation für Rechnung ID $invoice_id"
+                            Write-Error $_
+                            $success = $false
+                        }
                     }
                 }
 
                 # Attachments laden
                 if ($files_attachment -ne "") {
                     Write-Info "Anhänge/Attachments werden heruntergeladen..."
-                    foreach ($attachment_id in $response_invoices.attachments) {                                            
+                    foreach ($attachment_id in $invoice.attachments) {                                            
                         $url = -join($api_baseurl,$api_endpoint_attachment)
                         $url = $url.Replace("{attachmentId}", $attachment_id)                        
                         try {
@@ -191,12 +203,19 @@ try {
         } catch {
             Write-Error "Fehler beim Laden der XML-Datei für Rechnung ID $invoice_id"
             Write-Error $_
-        }        
+            $success = $false
+        }
+
+        if ($success -ne $true) {
+            $exit_code = 2
+        }
     }
 } catch {
     Write-Error "Fehler beim Laden der Rechnungsliste..."
     Write-Error $_
-    exit
+    Stop-Transcript
+    exit 1
 }
 
 Stop-Transcript
+exit $exit_code
