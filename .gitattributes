@@ -1,0 +1,3 @@
+# PowerShell-Skripte unverändert speichern (UTF-8 mit BOM, CRLF),
+# damit Windows PowerShell 5.1 Umlaute korrekt liest
+*.ps1 -text diff

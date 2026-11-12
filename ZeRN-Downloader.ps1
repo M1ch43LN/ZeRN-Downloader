@@ -1,221 +1,214 @@
-###############################################################################
+﻿###############################################################################
 # ZeRN-Downloader
-# 
+#
 # Skript zum automatisierten Herunterladen von eRechnungen aus dem Zentralen
 # eRechnungseingang Niedersachsen (ZeRN).
-# 
+#
 # Infos: https://github.com/M1ch43LN/ZeRN-Downloader
 #
+# Exit-Codes (für die Aufgabenplanung, Aufruf mit powershell.exe -File):
+#   0 = alles OK
+#   1 = Abbruch (Konfiguration, Verzeichnisse, Anmeldung, Rechnungsliste)
+#   2 = mindestens eine Rechnung fehlerhaft (bleibt im ZeRN auf "neu")
+#
 # Historie:
-# 
+#
 # 2025-01-27 Initiale Version
 # 2025-02-03 Trennung der Verzeichnisse nach XML-Syntax (CII/UBL) möglich
-# 2026-11-12 Fehlerkorrekturen: Anhänge je Rechnung, kein veralteter
+# 2026-11-12 1.2: Fehlerkorrekturen: Anhänge je Rechnung, kein veralteter
 #            Validierungsreport, 24h-Zeitstempel, Exit-Codes
-#            (0 = OK, 1 = Abbruch, 2 = mind. eine Rechnung fehlerhaft)
+# 2026-11-12 1.3: Token-Erneuerung (Refresh, Retry bei 401), bytegenaues
+#            Speichern von Rechnung und Validierungsreport, Syntax-Erkennung
+#            per Namespace (inkl. UBL-CreditNote), Anhänge über
+#            /document-Endpunkt mit sicheren Dateinamen, Rechnungs-XML wird
+#            nicht mehr doppelt als Anhang gespeichert, atomisches Schreiben,
+#            Verzeichnisse werden angelegt, TLS 1.2, kein Token im Log
 #
 ###############################################################################
 
 # Funktionen laden
 . "$PSScriptRoot\ZeRN-Downloader.functions.ps1"
-# Konfiguration laden
-. "$PSScriptRoot\ZeRN-Downloader.config.ps1"
 
-# Exit-Codes für die Aufgabenplanung
-# 0 = alles OK, 1 = Abbruch (Anmeldung/Rechnungsliste), 2 = mind. eine Rechnung fehlerhaft
+# Konfiguration laden
+$config_file = Join-Path $PSScriptRoot "ZeRN-Downloader.config.ps1"
+if (-not (Test-Path -LiteralPath $config_file)) {
+    Write-Error "Konfigurationsdatei '$config_file' nicht gefunden. Vorlage: ZeRN-Downloader.config-sample.ps1"
+    exit 1
+}
+. $config_file
+
+# TLS 1.2 erzwingen (Windows PowerShell 5.1 nutzt je nach .NET-Konfiguration sonst ältere Protokolle)
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
+# Exit-Code, siehe oben
 $exit_code = 0
+
+# Verzeichnisse prüfen bzw. anlegen
+try {
+    Initialize-Directory $files_log
+    Initialize-Directory $files_xml
+    Initialize-Directory $files_xml_cii
+    Initialize-Directory $files_xml_ubl
+    Initialize-Directory $files_validation
+    Initialize-Directory $files_attachment
+} catch {
+    Write-Error "Verzeichnis konnte nicht angelegt werden: $($_.Exception.Message)"
+    exit 1
+}
 
 # Protokoll starten
 $log_date = Get-Date -Format "yyyy-MM-dd"
-Start-Transcript -Path "$files_log\$log_date.log" -Append
+Start-Transcript -Path (Join-Path $files_log "$log_date.log") -Append | Out-Null
 
-Write-Debug "Verzeichnis XML-Dateien: $files_xml"
+Write-Debug "Verzeichnis XML-Dateien (unbekannte Syntax): $files_xml"
+Write-Debug "Verzeichnis XML-Dateien CII: $files_xml_cii"
+Write-Debug "Verzeichnis XML-Dateien UBL: $files_xml_ubl"
 Write-Debug "Verzeichnis Validierungsreports: $files_validation"
 Write-Debug "Verzeichnis Attachments: $files_attachment"
 
-# API-URLs definieren
-$api_baseurl = "https://api.erechnung.niedersachsen.de"
-$api_endpoint_accesstoken = "/api/accesstoken/create"
-$api_endpoint_invoice_new = "/api/invoice/new"
-$api_endpoint_invoice_xml = "/api/invoice/{invoiceId}/xml"
-$api_endpoint_invoice_validation = "/api/invoice/{invoiceId}/validationreport"
-$api_endpoint_invoice_downloaded = "/api/invoice/{invoiceId}/downloaded"
-$api_endpoint_attachment = "/api/attachment/{attachmentId}"
+$load_validation = -not [string]::IsNullOrWhiteSpace($files_validation)
+$load_attachments = -not [string]::IsNullOrWhiteSpace($files_attachment)
 
-# API-Headers setzen
-$api_headers = @{}
-$api_headers.Add("accept","application/json")
-
-$api_headers_attachment = @{}
-$api_headers_attachment.Add("accept", "application/octet-stream")
-
-# Body für Authorisierung
-$body = "{ ""userName"": ""$api_username"", ""password"": ""$api_password"" }"
-
-# User Agent
-$useragent = "ZeRN-Downloader/1.2(https://github.com/M1ch43LN/ZeRN-Downloader)"
-
-# Anmeldung an API, Access Token holen
-try {    
-    $url = -join($api_baseurl,$api_endpoint_accesstoken)
-    Write-Debug "API-URL: $url"
-    $response_auth = Invoke-RestMethod -Method Post -Uri $url -Headers $api_headers -ContentType "application/json" -Body $body -UserAgent $useragent
-    $api_accesstoken = $response_auth.accessToken    
-    $api_headers.add("Authorization", "Bearer $api_accesstoken")
-    $api_headers_attachment.add("Authorization", "Bearer $api_accesstoken")
+# Anmeldung an API
+try {
+    Update-ApiToken
     Write-Info "Anmeldung an API erfolgreich."
-    Write-Debug "Access Token: $api_accesstoken"
 } catch {
-    Write-Error "Fehler bei der Anmeldung..."
-    Write-Error $_
-    Stop-Transcript
+    Write-Error "Fehler bei der Anmeldung: $(Format-ApiError $_)"
+    Stop-Transcript | Out-Null
     exit 1
 }
 
+# Liste neuer Rechnungen holen
 try {
-    $url = -join($api_baseurl,$api_endpoint_invoice_new)
-    Write-Debug "API-URL: $url"
+    $response_invoices = Invoke-ApiJson -Path "/api/invoice/new"
+} catch {
+    Write-Error "Fehler beim Laden der Rechnungsliste: $(Format-ApiError $_)"
+    Stop-Transcript | Out-Null
+    exit 1
+}
 
-    # Liste neuer Rechnungen holen
-    $response_invoices = Invoke-RestMethod -Method Get -Uri $url -Headers $api_headers -ContentType "application/json" -UserAgent $useragent
+$invoices = @($response_invoices | Where-Object { $null -ne $_ })
+Write-Info "$($invoices.Count) neue Rechnung(en) vorhanden..."
 
-    Write-Info "$($response_invoices.Count) neue Rechung(en) vorhanden..."
+foreach ($invoice in $invoices) {
+    $invoice_id = [string]$invoice.id
+    $success = $true
 
-    foreach ($invoice in $response_invoices) {
-        $invoice_id = $invoice.id
-        $success = $true
-                
-        $url = -join($api_baseurl,$api_endpoint_invoice_xml)
-        $url = $url.Replace("{invoiceId}", $invoice_id)        
+    Write-Info "Verarbeite Rechnung ID '$invoice_id'..."
+    Write-Debug "Empfangen: $($invoice.received)"
+    Write-Debug "Absender: $($invoice.sender.name)"
+    Write-Debug "Rechnungsnummer: $($invoice.senderInvoiceNumber)"
+    Write-Debug "Schema: $($invoice.scheme), TypeCode: $($invoice.typeCode), Status: $($invoice.status)"
 
-        # XML-Datei der Rechnung herunterladen
+    # Schutz gegen manipulierte IDs im Dateinamen
+    $guid = [guid]::Empty
+    if (-not [guid]::TryParse($invoice_id, [ref]$guid)) {
+        Write-Error "Ungültige Rechnungs-ID '$invoice_id', Rechnung wird übersprungen."
+        $exit_code = 2
+        continue
+    }
+
+    # XML-Datei der Rechnung herunterladen und unverändert speichern
+    try {
+        $xml_bytes = Invoke-Api -Path "/api/invoice/$invoice_id/xml"
+
+        switch (Get-XmlSyntax $xml_bytes) {
+            "CII" {
+                Write-Debug "XML-Syntax: CII"
+                $file_xml = Join-Path $files_xml_cii "$invoice_id.xml"
+            }
+            "UBL" {
+                Write-Debug "XML-Syntax: UBL"
+                $file_xml = Join-Path $files_xml_ubl "$invoice_id.xml"
+            }
+            default {
+                Write-Warning "XML-Syntax nicht erkannt."
+                $file_xml = Join-Path $files_xml "$invoice_id.xml"
+            }
+        }
+
+        Write-Info "Speichere '$file_xml'"
+        Save-Bytes -Path $file_xml -Bytes $xml_bytes
+    } catch {
+        Write-Error "Fehler beim Laden/Speichern der XML-Rechnung ID $invoice_id : $(Format-ApiError $_)"
+        $exit_code = 2
+        # Ohne Rechnung keine weiteren Schritte und keine Markierung
+        continue
+    }
+
+    # Validierungsreport laden und unverändert speichern
+    if ($load_validation) {
         try {
-            Write-Info  "Lade XML-Rechnung ID '$invoice_id'..."
-            Write-Debug "API-URL: $url"
-            Write-Debug "Empfangen: $($invoice.received)"
-            Write-Debug "Absender: $($invoice.sender.name)"
-            Write-Debug "Rechnungsnummer: $($invoice.senderInvoiceNumber)"
-            Write-Debug "Schema: $($invoice.scheme)"
-            Write-Debug "Status: $($invoice.status)"            
-            $response_xml = Invoke-RestMethod -Method Get -Uri $url -Headers $api_headers -ContentType "application/json" -UserAgent $useragent
-
-            # XML-Datei speichern
-            try {
-                $xml = $response_xml.InnerXml
-                if ($xml.toLower().Contains("rsm:crossindustryinvoice") -eq $true) {
-                    Write-Debug "XML-Syntax: CII"
-                    $file_xml = "$files_xml_cii\$invoice_id.xml"
-                } else {
-                    if ($xml.toLower().Contains("ubl:invoice") -eq $true) {
-                        Write-Debug "XML-Syntax: UBL"
-                        $file_xml = "$files_xml_ubl\$invoice_id.xml"
-                    } else {
-                        Write-Warning "XML-Syntax nicht erkannt."
-                        $file_xml = "$files_xml\$invoice_id.xml"
-                    }
-                }
-
-                Write-Info "Speichere '$file_xml'"
-                $response_xml.InnerXml | Out-File -Encoding utf8 -FilePath $file_xml -Force
-
-                # Validationsreport laden
-                if ($files_validation -ne "") {                    
-                    $url = -join($api_baseurl,$api_endpoint_invoice_validation)
-                    $url = $url.Replace("{invoiceId}", $invoice_id)
-                    Write-Debug "API-URL: $url"
-                    # Zurücksetzen, damit nie der Report der vorherigen Rechnung gespeichert wird
-                    $response_validation = $null
-                    try {
-                        Write-Info "Lade Validierungsreport ID '$invoice_id'..."
-                        $response_validation = Invoke-RestMethod -Method Get -Uri $url -Headers $api_headers -ContentType "application/json" -UserAgent $useragent
-                    } catch {
-                        Write-Error "Fehler beim Laden des Validierungsreports für Rechnung ID $invoice_id"
-                        Write-Error $_
-                        $success = $false
-                    }
-
-                    # Validationreport speichern (nur wenn erfolgreich geladen)
-                    if ($null -ne $response_validation) {
-                        try {
-                            $file_validation = "$files_validation\$invoice_id.xml"
-                            Write-Info "Speichere '$file_validation'"
-                            $response_validation.InnerXml | Out-File -Encoding utf8 -FilePath $file_validation -Force
-                        } catch {
-                            Write-Error "Fehler beim Schreiben des Validierungsreports $file_validation für Rechnung ID $invoice_id"
-                            Write-Error $_
-                            $success = $false
-                        }
-                    }
-                }
-
-                # Attachments laden
-                if ($files_attachment -ne "") {
-                    Write-Info "Anhänge/Attachments werden heruntergeladen..."
-                    foreach ($attachment_id in $invoice.attachments) {                                            
-                        $url = -join($api_baseurl,$api_endpoint_attachment)
-                        $url = $url.Replace("{attachmentId}", $attachment_id)                        
-                        try {
-                            Write-Info "Lade Attachment ID '$attachment_id'..."                    
-                            Write-Debug "Attachment-ID: $attachment_id"
-                            Write-Debug "API-URL: $url"
-                            $response_attachment = Invoke-WebRequest -Method Get -Uri $url -Headers $api_headers_attachment -ContentType "application/octet-stream" -UserAgent $useragent                            
-                            $filename_attachment = $response_attachment.Headers.'Content-Disposition'.Split("=")[1].Replace("`"","").Split(";")[0]
-                            $file_attachment = "$files_attachment\$invoice_id-attachment-$filename_attachment"
-                            Write-Debug "Dateiname: $file_attachment"
-                            try {
-                                $file = [System.IO.FileStream]::new($file_attachment, [System.IO.FileMode]::Create)
-                                $file.write($response_attachment.Content, 0, $response_attachment.RawContentLength)
-                                $file.close()
-                            } catch {
-                                Write-Error "Fehler beim Speichern des Attachments $attachment_id für Rechnung ID $invoice_id"
-                                Write-Error $_
-                                $success = $false
-                            }
-                        } catch {
-                            Write-Error "Fehler beim Laden des Attachments $attachment_id für Rechnung ID $invoice_id"
-                            Write-Error $_
-                            $success = $false
-                        }
-                    }
-                }
-            } catch {
-                Write-Error "Fehler beim Schreiben der XML-Rechnung $file_xml für Rechnung ID $invoice_id"
-                Write-Error $_
-                $success = $false
-            }
-
-            # Rechnung als heruntergeladen markieren
-            if ($success -eq $true) {                
-                $url = -join($api_baseurl,$api_endpoint_invoice_downloaded)
-                $url = $url.Replace("{invoiceId}", $invoice_id)
-                Write-Info "Markiere Rechnung ID $invoice_id als 'heruntergeladen'..."
-                Write-Debug "API-URL: $url"                
-                try {
-                    Invoke-RestMethod -Method Patch -Uri $url -Headers $api_headers -ContentType "application/json" -UserAgent $useragent
-                } catch {
-                    Write-Error "Fehler beim Markieren als 'heruntergeladen'. Rechnung ID $invoice_id"
-                    Write-Error $_
-                    $success = $false
-                }  
-            } else {
-                Write-Warning "Aufgrund vorheriger Fehler oder Warnungen wird die Rechnung nicht als heruntergeladen markiert."
-            }
+            Write-Info "Lade Validierungsreport ID '$invoice_id'..."
+            $validation_bytes = Invoke-Api -Path "/api/invoice/$invoice_id/validationreport"
+            $file_validation = Join-Path $files_validation "$invoice_id.xml"
+            Write-Info "Speichere '$file_validation'"
+            Save-Bytes -Path $file_validation -Bytes $validation_bytes
         } catch {
-            Write-Error "Fehler beim Laden der XML-Datei für Rechnung ID $invoice_id"
-            Write-Error $_
+            Write-Error "Fehler beim Laden/Speichern des Validierungsreports für Rechnung ID $invoice_id : $(Format-ApiError $_)"
             $success = $false
         }
+    }
 
-        if ($success -ne $true) {
-            $exit_code = 2
+    # Anhänge laden. Die Liste enthält laut API auch die Originalrechnung als
+    # einzige XML-Datei; diese liegt bereits im XML-Verzeichnis und wird übersprungen.
+    if ($load_attachments) {
+        $attachment_ids = @($invoice.attachments | Where-Object { $null -ne $_ })
+        $used_names = @{}
+        foreach ($attachment_id in $attachment_ids) {
+            $attachment_id = [string]$attachment_id
+            try {
+                if (-not [guid]::TryParse($attachment_id, [ref]$guid)) {
+                    throw "Ungültige Attachment-ID '$attachment_id'"
+                }
+                Write-Debug "Lade Attachment ID '$attachment_id'..."
+                $attachment = Invoke-ApiJson -Path "/api/attachment/$attachment_id/document"
+
+                $is_xml = ("$($attachment.fileName)" -match '\.xml$') -or ("$($attachment.mimeType)" -match 'xml')
+                if ($is_xml) {
+                    Write-Debug "Attachment '$($attachment.fileName)' ist die Rechnungs-XML und wird übersprungen."
+                    continue
+                }
+
+                $name = Get-SafeFileName -FileName $attachment.fileName -Fallback "$attachment_id.bin"
+                if ($used_names.ContainsKey($name.ToLowerInvariant())) {
+                    $name = "$attachment_id-$name"
+                }
+                $used_names[$name.ToLowerInvariant()] = $true
+
+                $file_attachment = Join-Path $files_attachment "$invoice_id-attachment-$name"
+                $content = "$($attachment.content)"
+                if ([string]::IsNullOrEmpty($content)) {
+                    throw "Attachment hat keinen Inhalt."
+                }
+                Write-Info "Speichere '$file_attachment'"
+                Save-Bytes -Path $file_attachment -Bytes ([Convert]::FromBase64String($content))
+            } catch {
+                Write-Error "Fehler beim Laden/Speichern des Attachments $attachment_id für Rechnung ID $invoice_id : $(Format-ApiError $_)"
+                $success = $false
+            }
         }
     }
-} catch {
-    Write-Error "Fehler beim Laden der Rechnungsliste..."
-    Write-Error $_
-    Stop-Transcript
-    exit 1
+
+    # Rechnung als heruntergeladen markieren
+    if ($success) {
+        try {
+            Write-Info "Markiere Rechnung ID $invoice_id als 'heruntergeladen'..."
+            [void](Invoke-Api -Method Patch -Path "/api/invoice/$invoice_id/downloaded")
+        } catch {
+            Write-Error "Fehler beim Markieren als 'heruntergeladen'. Rechnung ID $invoice_id : $(Format-ApiError $_)"
+            $success = $false
+        }
+    } else {
+        Write-Warning "Aufgrund vorheriger Fehler wird die Rechnung ID $invoice_id nicht als heruntergeladen markiert."
+    }
+
+    if (-not $success) {
+        $exit_code = 2
+    }
 }
 
-Stop-Transcript
+Write-Info "Fertig (Exit-Code $exit_code)."
+Stop-Transcript | Out-Null
 exit $exit_code

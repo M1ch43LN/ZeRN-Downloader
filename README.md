@@ -3,6 +3,8 @@ Powershell-Skript zum automatisierten Herunterladen von eRechnungen (XRechnung) 
 
 Das Skript ist darauf ausgelegt, auf einem Windows-Server per Aufgabenplaner regelmäßig (z.B. einmal pro Stunde) ausgeführt zu werden. Die eRechnungsdateien werden aus dem ZeRN-Portal heruntergeladen und anschließend als "heruntergeladen" markiert.
 
+Lauffähig mit Windows PowerShell 5.1 und PowerShell 7.
+
 ## Voraussetzungen
 Um mit dem Skript eRechnungen aus dem ZeRN-Portal abrufen zu können, muss die API-Schnittstelle für das gewünschte Benutzerkonto vom Land freigeschaltet worden sein. 
 
@@ -51,3 +53,26 @@ $files_log = "$PSScriptRoot\log"
 # - $log_error
 $log_level = $log_info
 ```
+
+Nicht vorhandene Verzeichnisse werden beim Start angelegt.
+
+## Einrichtung in der Aufgabenplanung
+Programm: `powershell.exe`
+
+Argumente: `-NoProfile -ExecutionPolicy Bypass -File "C:\ZeRN\ZeRN-Downloader.ps1"`
+
+Wichtig ist `-File` (nicht `-Command`), damit der Exit-Code in der Aufgabenplanung als "Ergebnis der letzten Ausführung" ankommt.
+
+| Exit-Code | Bedeutung |
+|---|---|
+| 0 | Alles erfolgreich |
+| 1 | Abbruch: Konfiguration fehlt, Verzeichnis nicht anlegbar, Anmeldung oder Rechnungsliste fehlgeschlagen |
+| 2 | Mindestens eine Rechnung fehlerhaft. Diese wird nicht als "heruntergeladen" markiert und beim nächsten Lauf erneut geladen |
+
+## Verhalten
+- **Rechnungs-XML** wird bytegenau so gespeichert, wie das ZeRN sie liefert (keine Umformatierung, keine BOM). Die Einordnung nach CII/UBL erfolgt anhand des XML-Namespaces; UBL-Gutschriften (CreditNote) landen im UBL-Verzeichnis.
+- **Validierungsreport** (KoSIT) wird ebenfalls bytegenau als `<Rechnungs-ID>.xml` gespeichert.
+- **Anhänge** werden als `<Rechnungs-ID>-attachment-<Dateiname>` gespeichert. Die Originalrechnung, die das ZeRN zusätzlich als XML-Anhang führt, wird dabei übersprungen, da sie bereits im XML-Verzeichnis liegt. Dateinamen werden bereinigt (keine Pfadanteile, keine ungültigen Zeichen).
+- Dateien werden zunächst als `.part` geschrieben und erst danach umbenannt. Nachgelagerte Prozesse, die die Verzeichnisse überwachen, sehen so nie halbfertige Dateien.
+- Das Access Token wird bei Ablauf automatisch per Refresh Token erneuert; bei HTTP 401 wird der Aufruf einmalig mit neuem Token wiederholt.
+- Eine Rechnung wird nur dann als "heruntergeladen" markiert, wenn Rechnung, Validierungsreport und alle Anhänge erfolgreich gespeichert wurden.

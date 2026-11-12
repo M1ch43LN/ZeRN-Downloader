@@ -1,4 +1,4 @@
-# Benutzername für den Zugriff auf die API
+﻿# Benutzername für den Zugriff auf die API
 $api_username = "erechnung@domain.de"
 
 # Passwort für den Zugriff auf die API
